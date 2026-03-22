@@ -1,5 +1,5 @@
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-const OpenAI = require('openai');
+const axios = require('axios');
 
 
 // ================= STUDY MATERIALS DATABASE =================
@@ -40,10 +40,6 @@ const tempChannels = new Map();
 // ================= WARNINGS STORAGE =================
 const warnings = new Map();
 
-const openai = new OpenAI({
-  apiKey: process.env.NVIDIA_API_KEY,
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-});
 
 const client = new Client({
   intents: [
@@ -314,80 +310,74 @@ client.on('interactionCreate', async (interaction) => {
   }
 
 
-
-  // ================= AI (NVIDIA) =================
-  if (interaction.commandName === 'ai') {
-    const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY; // Ensure this env var is set!
-
-    if (!NVIDIA_API_KEY) {
-      return interaction.reply({ content: "❌ AI API key is not configured. Please contact the bot owner.", ephemeral: true });
-    }
-
+  // ================= RUN CODE =================
+  if (interaction.commandName === 'run') {
     await interaction.deferReply(); // Acknowledge the command immediately
-    const question = interaction.options.getString('question');
-    let fullResponse = '';
+
+    const language = interaction.options.getString('language');
+    const code = interaction.options.getString('code');
+
+    // Mapping Discord language options to Piston API runtime identifiers
+    const runtimeMap = {
+      'python': 'python', // Piston uses "python" for latest Python 3.x
+      'javascript': 'nodejs',
+      'c': 'c',
+      'cpp': 'cpp', // Piston uses "cpp" for C++
+      'java': 'java',
+      'rust': 'rust',
+      'go': 'go',
+      'csharp': 'csharp'
+    };
+
+    const pistonRuntime = runtimeMap[language];
+
+    if (!pistonRuntime) {
+      return interaction.editReply({ content: "❌ Unsupported language selected.", ephemeral: true });
+    }
 
     try {
-      const completion = await openai.chat.completions.create({
-        model: "deepseek-ai/deepseek-v3.1",
-        messages: [{"role":"user","content": question}],
-        temperature: 0.2,
-        top_p: 0.7,
-        max_tokens: 8192,
-        chat_template_kwargs: {"thinking":false},
-        stream: true
+      const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
+        language: pistonRuntime,
+        version: '*', // Use latest version available for the runtime
+        files: [
+          {
+            name: `main.${language === 'javascript' ? 'js' : language === 'python' ? 'py' : language === 'c' ? 'c' : language === 'cpp' ? 'cpp' : language === 'java' ? 'java' : language === 'rust' ? 'rs' : language === 'go' ? 'go' : language === 'csharp' ? 'cs' : 'txt'}`,
+            content: code
+          }
+        ]
       });
 
-      // Process the streaming response chunks
-      for await (const chunk of completion) {
-        const delta = chunk.choices[0]?.delta;
-        if (delta?.content) {
-          fullResponse += delta.content;
-        }
+      const data = response.data;
+      let output = '';
+
+      if (data.run && data.run.output) {
+        output += `**Output:**\n\`\`\`\n${data.run.output}\n\`\`\``;
       }
 
-      // After the loop finishes, fullResponse contains the complete AI output
-      if (fullResponse.length === 0) {
-        return interaction.editReply("🤷‍♂️ I couldn't get a response from the AI. Please try again later.");
+      if (data.compile && data.compile.output) {
+        output += `\n**Compile Errors:**\n\`\`\`\n${data.compile.output}\n\`\`\``;
       }
 
-      const MAX_MESSAGE_LENGTH = 2000;
-      if (fullResponse.length <= MAX_MESSAGE_LENGTH) {
-        await interaction.editReply(`🧠 **AI Response:**\n${fullResponse}`);
-      } else {
-        // Split into multiple messages if the response is too long for one Discord message
-        const parts = [];
-        let currentPart = '';
-        const lines = fullResponse.split('\n');
-
-        for (const line of lines) {
-          if ((currentPart + line + '\n').length > MAX_MESSAGE_LENGTH) {
-            parts.push(currentPart);
-            currentPart = line + '\n';
-          } else {
-            currentPart += line + '\n';
-          }
-        }
-        if (currentPart.length > 0) {
-          parts.push(currentPart);
-        }
-
-        // Send the first part as an edit to the deferred reply
-        await interaction.editReply(`🧠 **AI Response (Part 1):**\n${parts[0]}`);
-
-        // Send subsequent parts as follow-up messages
-        for (let i = 1; i < parts.length; i++) {
-          await interaction.followUp(`🧠 **AI Response (Part ${i + 1}):**\n${parts[i]}`);
-        }
+      if (data.run && data.run.stderr) {
+        output += `\n**Runtime Errors:**\n\`\`\`\n${data.run.stderr}\n\`\`\``;
       }
+
+      if (!output) {
+        output = 'No output or errors.';
+      }
+
+      // Ensure output fits within Discord's 2000 character limit
+      if (output.length > 1900) { // Keep some buffer
+        output = output.substring(0, 1800) + '\n... (output truncated due to length)';
+      }
+
+      await interaction.editReply(`⚙️ **Code Execution for ${language}**\n${output}`);
 
     } catch (error) {
-      console.error("OpenAI API Error:", error.response?.status, error.response?.data || error.message);
-      await interaction.editReply("❌ Failed to get a response from the AI. There might be an issue with the API service or configuration. Please check the bot's console for more details.");
+      console.error('Error executing code with Piston API:', error.response?.status, error.response?.data || error.message);
+      await interaction.editReply("❌ An error occurred while trying to execute your code. Please check your code for syntax errors and try again. If the issue persists, the code execution service might be temporarily unavailable.");
     }
   }
-
-});
 
 
 // ================= AUTO DELETE VOICE =================
