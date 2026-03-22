@@ -144,6 +144,15 @@ const commands = [
         .setDescription('The user to kick')
         .setRequired(true)),
 
+  // AI (NVIDIA)
+  new SlashCommandBuilder()
+    .setName('ai')
+    .setDescription('Ask the AI a question (powered by NVIDIA)')
+    .addStringOption(option =>
+      option.setName('question')
+        .setDescription('Your question for the AI')
+        .setRequired(true)),
+
 ].map(cmd => cmd.toJSON());
 
 
