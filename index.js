@@ -330,10 +330,10 @@ client.on('interactionCreate', async (interaction) => {
       "model": "qwen/qwen3.5-122b-a10b",
       "messages": [{"role":"user","content": question}],
       "max_tokens": 16384,
-      "temperature": 0.60,
+      "temperature": 0.80,
       "top_p": 0.95,
-      "stream": true, // We want streaming response
-      "chat_template_kwargs": {"enable_thinking":true},
+      "stream": false, // We want streaming response
+      "chat_template_kwargs": {"enable_thinking":false},
     };
 
     let fullResponse = '';
