@@ -62,8 +62,8 @@ const commands = [
   // DELETE CHANNEL
   new SlashCommandBuilder()
     .setName('delete')
-    .setDescription('Delete current temp channel')
-,
+    .setDescription('Delete current temp channel'),
+
   // WHOIS
   new SlashCommandBuilder()
     .setName('whois')
@@ -82,17 +82,6 @@ const commands = [
     .addSubcommand(subcmd => subcmd.setName('remove').setDescription('Remove a warning')
       .addUserOption(opt => opt.setName('name').setDescription('The user').setRequired(true))),
 
-  // MUTE
-  new SlashCommandBuilder()
-    .setName('mute')
-    .setDescription('Mute a user (Admin Only)')
-    .addUserOption(option => option.setName('name').setDescription('The user').setRequired(true)),
-
-  // UNMUTE
-  new SlashCommandBuilder()
-    .setName('unmute')
-    .setDescription('Unmute a user (Admin Only)')
-    .addUserOption(option => option.setName('name').setDescription('The user').setRequired(true)),
 
   // LOCK
   new SlashCommandBuilder()
@@ -103,7 +92,57 @@ const commands = [
   // UNLOCK
   new SlashCommandBuilder()
     .setName('unlock')
-    .setDescription('Unlock the current channel (Admin Only)')
+    .setDescription('Unlock the current channel (Admin Only)'),
+
+
+  // TEMPROLE
+  new SlashCommandBuilder()
+    .setName('temprole')
+    .setDescription('Add or remove a role from a user (Admin Only)')
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('add')
+        .setDescription('Add a role to a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('The user to give the role to')
+            .setRequired(true))
+        .addRoleOption(option =>
+          option.setName('role')
+            .setDescription('The role to give')
+            .setRequired(true)))
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('remove')
+        .setDescription('Remove a role from a user')
+        .addUserOption(option =>
+          option.setName('user')
+            .setDescription('The user to remove the role from')
+            .setRequired(true))
+        .addRoleOption(option =>
+          option.setName('role')
+            .setDescription('The role to remove')
+            .setRequired(true))),
+
+  // DEL (CLEAR MESSAGES)
+  new SlashCommandBuilder()
+    .setName('del')
+    .setDescription('Clear messages in the current channel (Admin Only)')
+    .addIntegerOption(option =>
+      option.setName('amount')
+        .setDescription('Number of messages to delete (1-100, default 100)')
+        .setMinValue(1)
+        .setMaxValue(100)
+        .setRequired(false)),
+
+  // KICK
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kick a user from the server (Admin Only)')
+    .addUserOption(option =>
+      option.setName('user')
+        .setDescription('The user to kick')
+        .setRequired(true)),
 
 ].map(cmd => cmd.toJSON());
 
