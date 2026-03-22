@@ -329,11 +329,11 @@ client.on('interactionCreate', async (interaction) => {
     const payload = {
       "model": "qwen/qwen3.5-122b-a10b",
       "messages": [{"role":"user","content": question}],
-      "max_tokens": 8192,
-      "temperature": 0.70,
-      "top_p": 0.95,
+      "max_tokens": 4096,
+      "temperature": 0.60,
+      "top_p": 0.80,
       "stream": true,
-      "chat_template_kwargs": {"enable_thinking": False},
+      "chat_template_kwargs": {"enable_thinking":False},
     };
 
     let fullResponse = '';
