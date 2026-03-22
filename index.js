@@ -377,7 +377,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply("❌ An error occurred while trying to execute your code. Please check your code for syntax errors and try again. If the issue persists, the code execution service might be temporarily unavailable.");
     }
   }
-
+});
 
 // ================= AUTO DELETE VOICE =================
 client.on('voiceStateUpdate', (oldState) => {
