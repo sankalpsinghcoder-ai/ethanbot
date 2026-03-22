@@ -332,8 +332,8 @@ client.on('interactionCreate', async (interaction) => {
       "max_tokens": 16384,
       "temperature": 0.80,
       "top_p": 0.95,
-      "stream": false,
-      "chat_template_kwargs": {"enable_thinking":false},
+      "stream": true,
+      "chat_template_kwargs": {"enable_thinking":true},
     };
 
     let fullResponse = '';
