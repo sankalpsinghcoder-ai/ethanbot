@@ -1,4 +1,6 @@
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const axios = require('axios');
+
 
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
@@ -305,6 +307,116 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply(`🔓 Channel Unlocked.`);
     }
   }
+
+  // ================= AI (NVIDIA) =================
+  if (interaction.commandName === 'ai') {
+    const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY; // Get API key from environment variables
+    const invokeUrl = "https://integrate.api.nvidia.com/v1/chat/completions";
+
+    if (!NVIDIA_API_KEY) {
+      return interaction.reply({ content: "❌ AI API key is not configured. Please contact the bot owner.", ephemeral: true });
+    }
+
+    await interaction.deferReply(); // Acknowledge the command immediately
+
+    const question = interaction.options.getString('question');
+
+    const headers = {
+      "Authorization": `Bearer ${NVIDIA_API_KEY}`,
+      "Accept": "text/event-stream" // We're expecting a stream
+    };
+
+    const payload = {
+      "model": "qwen/qwen3.5-122b-a10b",
+      "messages": [{"role":"user","content": question}],
+      "max_tokens": 16384,
+      "temperature": 0.60,
+      "top_p": 0.95,
+      "stream": true, // We want streaming response
+      "chat_template_kwargs": {"enable_thinking":true},
+    };
+
+    let fullResponse = '';
+    let dataBuffer = ''; // To handle partial SSE chunks
+
+    try {
+      const response = await axios.post(invokeUrl, payload, {
+        headers: headers,
+        responseType: 'stream' // Tell axios to treat it as a stream
+      });
+
+      response.data.on('data', (chunk) => {
+        dataBuffer += chunk.toString();
+        const parts = dataBuffer.split('\n\n');
+        dataBuffer = parts.pop(); // Keep the last (potentially incomplete) part
+
+        for (const part of parts) {
+          if (part.startsWith('data: ')) {
+            const jsonStr = part.substring(6); // Remove 'data: ' prefix
+            if (jsonStr.trim() === '[DONE]') { // Check for the standard SSE completion signal
+              continue;
+            }
+            try {
+              const data = JSON.parse(jsonStr);
+              const content = data.choices?.[0]?.delta?.content;
+              if (content) {
+                fullResponse += content;
+              }
+            } catch (e) {
+              console.error("Error parsing SSE chunk:", e, jsonStr);
+            }
+          }
+        }
+      });
+
+      response.data.on('end', async () => {
+        // Send the complete response, splitting if it's too long
+        if (fullResponse.length === 0) {
+          return interaction.editReply("🤷‍♂️ I couldn't get a response from the AI. Please try again later.");
+        }
+
+        const MAX_MESSAGE_LENGTH = 2000;
+        if (fullResponse.length <= MAX_MESSAGE_LENGTH) {
+          await interaction.editReply(`🧠 **AI Response:**\n${fullResponse}`);
+        } else {
+          // Split into multiple messages
+          const parts = [];
+          let currentPart = '';
+          const lines = fullResponse.split('\n');
+
+          for (const line of lines) {
+            if ((currentPart + line + '\n').length > MAX_MESSAGE_LENGTH) {
+              parts.push(currentPart);
+              currentPart = line + '\n';
+            } else {
+              currentPart += line + '\n';
+            }
+          }
+          if (currentPart.length > 0) {
+            parts.push(currentPart);
+          }
+
+          // Send the first part as an edit to the deferred reply
+          await interaction.editReply(`🧠 **AI Response (Part 1):**\n${parts[0]}`);
+
+          // Send subsequent parts as follow-up messages
+          for (let i = 1; i < parts.length; i++) {
+            await interaction.followUp(`🧠 **AI Response (Part ${i + 1}):**\n${parts[i]}`);
+          }
+        }
+      });
+
+      response.data.on('error', async (err) => {
+        console.error("NVIDIA API Stream Error:", err);
+        await interaction.editReply("❌ An error occurred while streaming the AI response. Please try again.");
+      });
+
+    } catch (error) {
+      console.error("NVIDIA API Request Error:", error.response?.status, error.response?.data?.toString() || error.message);
+      await interaction.editReply("❌ Failed to get a response from the AI. There might be an issue with the API service or configuration.");
+    }
+  }
+
 });
 
 // ================= AUTO DELETE VOICE =================
