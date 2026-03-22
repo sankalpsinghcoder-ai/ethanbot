@@ -6,6 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "express": "^4.18.2",
     "@discordjs/voice": "^0.19.2",
     "@distube/ytdl-core": "^4.16.12",
     "@google/generative-ai": "^0.24.1",
