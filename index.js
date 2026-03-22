@@ -331,7 +331,7 @@ client.on('interactionCreate', async (interaction) => {
       const completion = await openai.chat.completions.create({
         model: "qwen/qwen3-next-80b-a3b-instruct", 
         messages: [{"role":"user","content": question}],
-        temperature: 0.5,
+        temperature: 0.6,
         top_p: 0.7,
         max_tokens: 4096,
         stream: true
