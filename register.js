@@ -144,6 +144,29 @@ const commands = [
         .setDescription('The user to kick')
         .setRequired(true)),
 
+  // RUN CODE
+  new SlashCommandBuilder()
+    .setName('run')
+    .setDescription('Execute code in various languages')
+    .addStringOption(option =>
+      option.setName('language')
+        .setDescription('Choose the programming language')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Python', value: 'python' },
+          { name: 'JavaScript', value: 'javascript' },
+          { name: 'C', value: 'c' },
+          { name: 'C++', value: 'cpp' },
+          { name: 'Java', value: 'java' },
+          { name: 'Rust', value: 'rust' },
+          { name: 'Go', value: 'go' },
+          { name: 'C#', value: 'csharp' }
+        ))
+    .addStringOption(option =>
+      option.setName('code')
+        .setDescription('The code to execute')
+        .setRequired(true)),
+
 ].map(cmd => cmd.toJSON());
 
 
