@@ -179,23 +179,96 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // ================= MUTE & UNMUTE =================
-  if (interaction.commandName === 'mute' || interaction.commandName === 'unmute') {
+
+  // ================= TEMPROLE =================
+  if (interaction.commandName === 'temprole') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: "❌ You don't have permission!", ephemeral: true });
     }
 
-    const target = interaction.options.getMember('name');
-    
-    if (!target) return interaction.reply("❌ User not found!");
+    const subcommand = interaction.options.getSubcommand();
+    const targetUser = interaction.options.getMember('user');
+    const role = interaction.options.getRole('role');
 
-    if (interaction.commandName === 'mute') {
-      // Mutes for 28 days (Discord Max)
-      await target.timeout(28 * 24 * 60 * 60 * 1000, "Muted by admin");
-      await interaction.reply(`🔇 **${target.user.tag}** has been muted.`);
-    } else {
-      await target.timeout(null);
-      await interaction.reply(`🔊 **${target.user.tag}** has been unmuted.`);
+    if (!targetUser) {
+      return interaction.reply({ content: "❌ User not found!", ephemeral: true });
+    }
+    if (!role) {
+      return interaction.reply({ content: "❌ Role not found!", ephemeral: true });
+    }
+
+    try {
+      if (subcommand === 'add') {
+        if (targetUser.roles.cache.has(role.id)) {
+          return interaction.reply({ content: `✅ **${targetUser.user.tag}** already has the **${role.name}** role.`, ephemeral: true });
+        }
+        await targetUser.roles.add(role);
+        await interaction.reply(`✅ Added the **${role.name}** role to **${targetUser.user.tag}**.`);
+      } else if (subcommand === 'remove') {
+        if (!targetUser.roles.cache.has(role.id)) {
+          return interaction.reply({ content: `❌ **${targetUser.user.tag}** does not have the **${role.name}** role.`, ephemeral: true });
+        }
+        await targetUser.roles.remove(role);
+        await interaction.reply(`✅ Removed the **${role.name}** role from **${targetUser.user.tag}**.`);
+      }
+    } catch (error) {
+      console.error("Error managing role:", error);
+      await interaction.reply({ content: "❌ Failed to manage role. Please check bot permissions and role hierarchy.", ephemeral: true });
+    }
+  }
+
+  // ================= DEL (CLEAR MESSAGES) =================
+  if (interaction.commandName === 'del') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: "❌ You don't have permission!", ephemeral: true });
+    }
+
+    const amount = interaction.options.getInteger('amount') || 100;
+    const channel = interaction.channel;
+
+    if (channel.type !== ChannelType.GuildText) {
+      return interaction.reply({ content: "❌ This command can only be used in text channels.", ephemeral: true });
+    }
+
+    try {
+      await interaction.deferReply({ ephemeral: true }); // Acknowledge the interaction while messages are being fetched/deleted
+      const fetchedMessages = await channel.messages.fetch({ limit: amount });
+      await channel.bulkDelete(fetchedMessages, true); // true to filter out messages older than 14 days
+      await interaction.editReply(`✅ Cleared **${fetchedMessages.size}** messages in this channel.`);
+    } catch (error) {
+      console.error("Error clearing messages:", error);
+      await interaction.editReply({ content: "❌ Failed to clear messages. Ensure the bot has 'Manage Messages' permission and messages are not older than 14 days.", ephemeral: true });
+    }
+  }
+
+  // ================= KICK =================
+  if (interaction.commandName === 'kick') {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      return interaction.reply({ content: "❌ You don't have permission!", ephemeral: true });
+    }
+
+    const target = interaction.options.getMember('user');
+
+    if (!target) {
+      return interaction.reply({ content: "❌ User not found!", ephemeral: true });
+    }
+    if (!target.kickable) {
+      return interaction.reply({ content: "❌ I cannot kick this user. They might have a higher role or I lack permissions.", ephemeral: true });
+    }
+    if (target.id === interaction.user.id) {
+        return interaction.reply({ content: "❌ You cannot kick yourself!", ephemeral: true });
+    }
+    if (target.id === client.user.id) {
+        return interaction.reply({ content: "❌ I cannot kick myself!", ephemeral: true });
+    }
+
+
+    try {
+      await target.kick();
+      await interaction.reply(`✅ **${target.user.tag}** has been kicked from the server.`);
+    } catch (error) {
+      console.error("Error kicking user:", error);
+      await interaction.reply({ content: "❌ Failed to kick user. Please check bot permissions.", ephemeral: true });
     }
   }
 
