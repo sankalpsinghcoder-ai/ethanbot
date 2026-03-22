@@ -1,6 +1,4 @@
-
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
-
 
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
@@ -49,20 +47,18 @@ const client = new Client({
   ]
 });
 
-client.on('clientReady', () => {
+client.on('ready', () => {
   console.log("==================================================");
   console.log(`  Bot Online: ${client.user.tag}`);
   console.log("==================================================");
 });
 
 // ================= INTERACTIONS =================
-
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   // ================= STUDY (NOTES & PYQ) =================
   if (interaction.commandName === 'study') {
-    // Check which subcommand was used (sem1 or sem2)
     const subcommand = interaction.options.getSubcommand();
     const sem = subcommand === 'sem1' ? 1 : 2; 
     
@@ -77,9 +73,7 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply(`📄 **Semester ${sem} Previous Year Papers (PYQs):**\n${semData.pyq}`);
     }
 
-    // If a specific subject is requested
     const subjectLink = semData.subjects[topic];
-
     return interaction.reply(`📘 **${topicNames[topic]} Notes (Semester ${sem}):**\n${subjectLink}`);
   }
 
@@ -238,11 +232,9 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply(`🔓 Channel Unlocked.`);
     }
   }
-
 });
 
 // ================= AUTO DELETE VOICE =================
-
 client.on('voiceStateUpdate', (oldState) => {
   const channel = oldState.channel;
 
@@ -256,6 +248,25 @@ client.on('voiceStateUpdate', (oldState) => {
   }
 });
 
+// ================= AUTO DELETE TEXT =================
+setInterval(() => {
+  tempChannels.forEach((data, channelId) => {
+    if (data.type !== 'text') return;
+
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) return;
+
+    const lastMessage = channel.lastMessage;
+    if (!lastMessage) return;
+
+    const diff = Date.now() - lastMessage.createdTimestamp;
+
+    if (diff > 60000) { // Keep text channels for 1 minute of inactivity before deleting
+      channel.delete().catch(console.error);
+      tempChannels.delete(channelId);
+    }
+  });
+}, 30000);
 
 // ================= LOGIN =================
 client.login(process.env.TOKEN);
