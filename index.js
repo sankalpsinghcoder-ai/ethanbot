@@ -1,7 +1,6 @@
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
 
-
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
   1: {
