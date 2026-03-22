@@ -329,11 +329,12 @@ client.on('interactionCreate', async (interaction) => {
 
     try {
       const completion = await openai.chat.completions.create({
-        model: "qwen/qwen3-next-80b-a3b-instruct", 
+        model: "deepseek-ai/deepseek-v3.1",
         messages: [{"role":"user","content": question}],
-        temperature: 0.6,
+        temperature: 0.2,
         top_p: 0.7,
-        max_tokens: 4096,
+        max_tokens: 8192,
+        chat_template_kwargs: {"thinking":false},
         stream: true
       });
 
