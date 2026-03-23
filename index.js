@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
+const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
 
 // ================= STUDY MATERIALS DATABASE =================
@@ -58,6 +59,33 @@ client.on('ready', () => {
 
 // ================= INTERACTIONS =================
 client.on('interactionCreate', async (interaction) => {
+
+  // ================= DROPDOWN HANDLER =================
+  if (interaction.isStringSelectMenu()) {
+
+    if (interaction.customId === 'delete_channel_select') {
+
+      const channelId = interaction.values[0];
+      const channel = interaction.guild.channels.cache.get(channelId);
+
+      if (!channel) {
+        return interaction.update({
+          content: "❌ Channel not found.",
+          components: []
+        });
+      }
+
+      await channel.delete().catch(console.error);
+      tempChannels.delete(channelId);
+
+      return interaction.update({
+        content: `✅ Channel **${channel.name}** deleted.`,
+        components: []
+      });
+    }
+  }
+
+  // ================= SLASH COMMANDS =================
   if (!interaction.isChatInputCommand()) return;
 
   // ================= STUDY (NOTES & PYQ) =================
@@ -131,16 +159,40 @@ client.on('interactionCreate', async (interaction) => {
 
   // ================= DELETE =================
   if (interaction.commandName === 'delete') {
-    const channel = interaction.channel;
 
-    if (!tempChannels.has(channel.id)) {
-      return interaction.reply("❌ Not a temp channel");
-    }
-
-    await interaction.reply("🗑️ Deleting this channel...");
-    await channel.delete().catch(console.error);
-    tempChannels.delete(channel.id);
+  if (tempChannels.size === 0) {
+    return interaction.reply("❌ No temp channels available.");
   }
+
+  const options = [];
+
+  tempChannels.forEach((data, channelId) => {
+    const channel = interaction.guild.channels.cache.get(channelId);
+    if (channel) {
+      options.push({
+        label: channel.name,
+        value: channel.id
+      });
+    }
+  });
+
+  if (options.length === 0) {
+    return interaction.reply("❌ No valid temp channels found.");
+  }
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId('delete_channel_select')
+    .setPlaceholder('Select a channel to delete')
+    .addOptions(options.slice(0, 25)); // Discord limit = 25
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+
+  await interaction.reply({
+    content: "🗑️ Select a temp channel to delete:",
+    components: [row],
+    ephemeral: true
+  });
+}
 
   // ================= WHOIS =================
   if (interaction.commandName === 'whois') {
