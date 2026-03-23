@@ -375,7 +375,7 @@ await interaction.editReply(
 
     } catch (error) {
       console.error("FULL ERROR:", error.response?.data || error.message);
-      await interaction.editReply("❌ An error occurred while trying to execute your code. Please check your code for syntax errors and try again. If the issue persists, the code execution service might be temporarily unavailable.");
+      await interaction.editReply("❌ An error occurred while running the code. The code execution service might be temporarily unavailable. Request @<Code/Drunkard> to start the service.");
     }
   }
 
