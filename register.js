@@ -61,8 +61,8 @@ const commands = [
 
   // DELETE CHANNEL
   new SlashCommandBuilder()
-    .setName('delete')
-    .setDescription('Delete current temp channel'),
+  .setName('delete')
+  .setDescription('Delete a temp channel'),
 
   // WHOIS
   new SlashCommandBuilder()
@@ -188,6 +188,7 @@ const commands = [
 
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+
 
 rest.put(
   Routes.applicationGuildCommands('1484609251048554717', '1482119225643368450'),
