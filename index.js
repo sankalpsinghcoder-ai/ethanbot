@@ -380,6 +380,44 @@ await interaction.editReply(
   }
 });
 
+// ================= BADGE =================
+if (interaction.commandName === 'badge') {
+  const language = interaction.options.getString('language');
+
+  const roleMap = {
+    python: "Python",
+    javascript: "JavaScript",
+    c: "C",
+    cpp: "C++",
+    java: "Java"
+  };
+
+  const roleName = roleMap[language];
+
+  const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+
+  if (!role) {
+    return interaction.reply("❌ Role not found. Ask admin to create it.");
+  }
+
+  const member = interaction.member;
+
+  // remove old badge roles
+  const allBadges = Object.values(roleMap);
+
+  for (let badge of allBadges) {
+    const r = interaction.guild.roles.cache.find(x => x.name === badge);
+    if (r && member.roles.cache.has(r.id)) {
+      await member.roles.remove(r);
+    }
+  }
+
+  // add new badge
+  await member.roles.add(role);
+
+  await interaction.reply(`🏷️ You are now a **${roleName} Developer**`);
+}
+
 // ================= AUTO DELETE VOICE =================
 client.on('voiceStateUpdate', (oldState) => {
   const channel = oldState.channel;
