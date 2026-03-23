@@ -337,15 +337,13 @@ client.on('interactionCreate', async (interaction) => {
 
     try {
       const response = await axios.post('https://piston.kludex.dev/api/v2/execute', {
-        language: selected.lang,
-        version: selected.version,
-        files: [
-          {
-            name: `main.${language === 'javascript' ? 'js' : language === 'python' ? 'py' : language === 'c' ? 'c' : language === 'cpp' ? 'cpp' : language === 'java' ? 'java' : language === 'rust' ? 'rs' : language === 'go' ? 'go' : language === 'csharp' ? 'cs' : 'txt'}`,
-            content: code
-          }
-        ]
-      });
+  language: selected.lang,
+  version: selected.version,
+  source: code,
+  stdin: "",
+  args: []
+  });
+
 
       const data = response.data;
       let output = '';
