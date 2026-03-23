@@ -157,10 +157,7 @@ const commands = [
           { name: 'JavaScript', value: 'javascript' },
           { name: 'C', value: 'c' },
           { name: 'C++', value: 'cpp' },
-          { name: 'Java', value: 'java' },
-          { name: 'Rust', value: 'rust' },
-          { name: 'Go', value: 'go' },
-          { name: 'C#', value: 'csharp' }
+          { name: 'Java', value: 'java' }
         ))
     .addStringOption(option =>
       option.setName('code')
