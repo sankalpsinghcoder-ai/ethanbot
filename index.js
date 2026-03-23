@@ -343,7 +343,8 @@ client.on('interactionCreate', async (interaction) => {
   code: code
 });
 
-const output = response.data;
+const output = response.data.output;
+const time = response.data.time;
 
 // handle long output
 let finalOutput = output;
@@ -352,7 +353,7 @@ if (finalOutput.length > 1900) {
 }
 
 await interaction.editReply(
-  `⚙️ **Code Execution (${language})**\n\`\`\`\n${finalOutput}\n\`\`\``
+  `⚙️ **Code Execution (${language})**\n\n📤 **Output:**\n\`\`\`\n${finalOutput}\n\`\`\`\n⏱️ **Time Taken:** ${time} ms`
 );
 
     } catch (error) {
