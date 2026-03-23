@@ -61,7 +61,7 @@ const commands = [
 
   // DELETE CHANNEL
   new SlashCommandBuilder()
-  .setName('delete')
+  .setName('delete-temp-channel')
   .setDescription('Delete a temp channel'),
 
   // WHOIS
@@ -124,9 +124,9 @@ const commands = [
             .setDescription('The role to remove')
             .setRequired(true))),
 
-  // DEL (CLEAR MESSAGES)
+  // clear chat (CLEAR MESSAGES)
   new SlashCommandBuilder()
-    .setName('del')
+    .setName('clear-chat')
     .setDescription('Clear messages in the current channel (Admin Only)')
     .addIntegerOption(option =>
       option.setName('amount')
