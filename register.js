@@ -168,6 +168,22 @@ const commands = [
         .setDescription('Upload your code file')
         .setRequired(false)),
 
+  // ROLE
+  new SlashCommandBuilder()
+  .setName('badge')
+  .setDescription('Set your programming language badge')
+  .addStringOption(option =>
+    option.setName('language')
+      .setDescription('Choose your badge')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Python', value: 'python' },
+        { name: 'JavaScript', value: 'javascript' },
+        { name: 'C', value: 'c' },
+        { name: 'C++', value: 'cpp' },
+        { name: 'Java', value: 'java' }
+      )),
+
 ].map(cmd => cmd.toJSON());
 
 
