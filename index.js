@@ -336,7 +336,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     try {
-      const response = await axios.post('https://piston.kludex.dev/api/v2/execute', {
+      const response = await axios.post('https://emkc.org/api/v2/piston/runtimes', {
   language: selected.lang,
   version: selected.version,
   source: code,
