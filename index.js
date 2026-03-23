@@ -353,7 +353,7 @@ if (finalOutput.length > 1900) {
 }
 
 await interaction.editReply(
-  `⚙️ **Code Execution (${language})**\n\n📤 **Output:**\n\`\`\`\n${finalOutput}\n\`\`\`\n⏱️ **Time Taken:** ${time} ms`
+  `⚙️ **Code Execution (${language})**\n\n**Output:**\n\`\`\`\n${finalOutput}\n\`\`\`\n**Time taken to execute on main machine:** ${time} ms`
 );
 
     } catch (error) {
