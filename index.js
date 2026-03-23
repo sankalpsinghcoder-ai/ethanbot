@@ -315,7 +315,9 @@ client.on('interactionCreate', async (interaction) => {
     await interaction.deferReply(); // Acknowledge the command immediately
 
     const language = interaction.options.getString('language');
-    const code = interaction.options.getString('code');
+    let code = interaction.options.getString('code');
+    
+    code = code.replace(/\\n/g, '\n');
 
     // Mapping Discord language options to Piston API runtime identifiers
     const runtimeMap = {
