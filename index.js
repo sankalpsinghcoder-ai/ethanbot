@@ -336,40 +336,22 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     try {
-      const response = await axios.post('https://emkc.org/api/v2/piston/runtimes', {
-  language: selected.lang,
-  version: selected.version,
-  source: code,
-  stdin: "",
-  args: []
-  });
+      const response = await axios.post("https://jene-shadeful-lala.ngrok-free.dev/run", {
+  language: language,
+  code: code
+});
 
+const output = response.data;
 
-      const data = response.data;
-      let output = '';
+// handle long output
+let finalOutput = output;
+if (finalOutput.length > 1900) {
+  finalOutput = finalOutput.substring(0, 1800) + "\n...truncated";
+}
 
-      if (data.run && data.run.output) {
-        output += `**Output:**\n\`\`\`\n${data.run.output}\n\`\`\``;
-      }
-
-      if (data.compile && data.compile.output) {
-        output += `\n**Compile Errors:**\n\`\`\`\n${data.compile.output}\n\`\`\``;
-      }
-
-      if (data.run && data.run.stderr) {
-        output += `\n**Runtime Errors:**\n\`\`\`\n${data.run.stderr}\n\`\`\``;
-      }
-
-      if (!output) {
-        output = 'No output or errors.';
-      }
-
-      // Ensure output fits within Discord's 2000 character limit
-      if (output.length > 1900) { // Keep some buffer
-        output = output.substring(0, 1800) + '\n... (output truncated due to length)';
-      }
-
-      await interaction.editReply(`⚙️ **Code Execution for ${language}**\n${output}`);
+await interaction.editReply(
+  `⚙️ **Code Execution (${language})**\n\`\`\`\n${finalOutput}\n\`\`\``
+);
 
     } catch (error) {
       console.error("FULL ERROR:", error.response?.data || error.message);
