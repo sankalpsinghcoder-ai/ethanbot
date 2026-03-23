@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const axios = require('axios');
 
+
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
   1: {
@@ -318,26 +319,26 @@ client.on('interactionCreate', async (interaction) => {
 
     // Mapping Discord language options to Piston API runtime identifiers
     const runtimeMap = {
-      'python': 'python', // Piston uses "python" for latest Python 3.x
-      'javascript': 'nodejs',
-      'c': 'c',
-      'cpp': 'cpp', // Piston uses "cpp" for C++
-      'java': 'java',
-      'rust': 'rust',
-      'go': 'go',
-      'csharp': 'csharp'
-    };
+  python: { lang: 'python', version: '3.10.0' },
+  javascript: { lang: 'nodejs', version: '18.15.0' },
+  c: { lang: 'c', version: '10.2.0' },
+  cpp: { lang: 'cpp', version: '10.2.0' },
+  java: { lang: 'java', version: '15.0.2' },
+  rust: { lang: 'rust', version: '1.68.2' },
+  go: { lang: 'go', version: '1.16.2' },
+  csharp: { lang: 'csharp', version: '6.12.0' }
+  };
 
-    const pistonRuntime = runtimeMap[language];
+    const selected = runtimeMap[language];
 
-    if (!pistonRuntime) {
+    if (!selected) {
       return interaction.editReply({ content: "❌ Unsupported language selected.", ephemeral: true });
     }
 
     try {
       const response = await axios.post('https://emkc.org/api/v2/piston/execute', {
-        language: pistonRuntime,
-        version: '*', // Use latest version available for the runtime
+        language: selected.lang,
+        version: selected.version,
         files: [
           {
             name: `main.${language === 'javascript' ? 'js' : language === 'python' ? 'py' : language === 'c' ? 'c' : language === 'cpp' ? 'cpp' : language === 'java' ? 'java' : language === 'rust' ? 'rs' : language === 'go' ? 'go' : language === 'csharp' ? 'cs' : 'txt'}`,
@@ -373,7 +374,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply(`⚙️ **Code Execution for ${language}**\n${output}`);
 
     } catch (error) {
-      console.error('Error executing code with Piston API:', error.response?.status, error.response?.data || error.message);
+      console.error("FULL ERROR:", error.response?.data || error.message);
       await interaction.editReply("❌ An error occurred while trying to execute your code. Please check your code for syntax errors and try again. If the issue persists, the code execution service might be temporarily unavailable.");
     }
   }
