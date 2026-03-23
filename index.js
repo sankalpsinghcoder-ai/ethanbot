@@ -314,8 +314,25 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.commandName === 'run') {
     await interaction.deferReply(); // Acknowledge the command immediately
 
-    const language = interaction.options.getString('language');
+    let language = interaction.options.getString('language');
     let code = interaction.options.getString('code');
+const file = interaction.options.getAttachment('file');
+
+// 📂 If file uploaded → get code from file
+if (file) {
+  const res = await axios.get(file.url);
+  code = res.data;
+}
+
+// fallback for manual input
+if (code) {
+  code = code.replace(/\\n/g, '\n');
+}
+
+// ❌ if nothing provided
+if (!code) {
+  return interaction.editReply("❌ Provide code or upload a file.");
+}
     
     code = code.replace(/\\n/g, '\n');
 
