@@ -165,7 +165,11 @@ const commands = [
     .addStringOption(option =>
       option.setName('code')
         .setDescription('The code to execute')
-        .setRequired(true)),
+        .setRequired(false))
+    .addAttachmentOption(option =>
+      option.setName('file')
+        .setDescription('Upload your code file')
+        .setRequired(false)),
 
 ].map(cmd => cmd.toJSON());
 
