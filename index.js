@@ -158,7 +158,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ================= DELETE =================
-  if (interaction.commandName === 'delete') {
+  if (interaction.commandName === 'delete-temp-channel') {
 
   if (tempChannels.size === 0) {
     return interaction.reply("❌ No temp channels available.");
@@ -273,7 +273,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ================= DEL (CLEAR MESSAGES) =================
-  if (interaction.commandName === 'del') {
+  if (interaction.commandName === 'clear-chat') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: "❌ You don't have permission!", ephemeral: true });
     }
