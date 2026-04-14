@@ -1,7 +1,18 @@
-const { Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { 
+  Client, GatewayIntentBits, ChannelType, EmbedBuilder, PermissionFlagsBits, 
+  ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, 
+  ModalBuilder, TextInputBuilder, TextInputStyle 
+} = require('discord.js');
 const axios = require('axios');
-const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const { spawn, execSync } = require('child_process');
 
+// ================= SETUP TEMP DIR =================
+const tempDir = path.join(__dirname, "temp");
+if (!fs.existsSync(tempDir)) {
+  fs.mkdirSync(tempDir);
+}
 
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
@@ -36,11 +47,10 @@ const topicNames = {
   cpp: "C++"
 };
 
-// ================= TEMP CHANNEL STORAGE =================
+// ================= STORAGE MAPS =================
 const tempChannels = new Map();
-// ================= WARNINGS STORAGE =================
 const warnings = new Map();
-
+const activeSessions = new Map(); // KEEPS TRACK OF USER'S RUNNING CODE
 
 const client = new Client({
   intents: [
@@ -60,28 +70,66 @@ client.on('ready', () => {
 // ================= INTERACTIONS =================
 client.on('interactionCreate', async (interaction) => {
 
-  // ================= DROPDOWN HANDLER =================
+  // ================= MODAL SUBMIT (RECEIVING CODE INPUT) =================
+  if (interaction.isModalSubmit() && interaction.customId === 'code_input_modal') {
+    const userInput = interaction.fields.getTextInputValue('code_input_field');
+    const session = activeSessions.get(interaction.user.id);
+
+    if (!session) {
+      return interaction.reply({ content: "❌ Your code execution session has ended or expired.", ephemeral: true });
+    }
+
+    // Send the input directly to the running program
+    session.process.stdin.write(userInput + "\n");
+    
+    // Add what the user typed to the visual output so they can see it
+    session.output += `> ${userInput}\n`;
+    
+    await interaction.reply({ content: `✅ Input sent: \`${userInput}\``, ephemeral: true });
+    
+    // delete the "input sent" message after 2 seconds to keep it clean
+    setTimeout(() => interaction.deleteReply().catch(()=>{}), 2000); 
+    return;
+  }
+
+  // ================= BUTTON CLICK (OPENING INPUT BOX) =================
+  if (interaction.isButton() && interaction.customId === 'send_code_input') {
+    const session = activeSessions.get(interaction.user.id);
+    if (!session) {
+      return interaction.reply({ content: "❌ No active code session found.", ephemeral: true });
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId('code_input_modal')
+      .setTitle('Provide Input to your Code');
+
+    const inputField = new TextInputBuilder()
+      .setCustomId('code_input_field')
+      .setLabel('Type your input below:')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const row = new ActionRowBuilder().addComponents(inputField);
+    modal.addComponents(row);
+
+    await interaction.showModal(modal);
+    return;
+  }
+
+  // ================= DROPDOWN HANDLER (DELETE CHANNELS) =================
   if (interaction.isStringSelectMenu()) {
-
     if (interaction.customId === 'delete_channel_select') {
-
       const channelId = interaction.values[0];
       const channel = interaction.guild.channels.cache.get(channelId);
 
       if (!channel) {
-        return interaction.update({
-          content: "❌ Channel not found.",
-          components: []
-        });
+        return interaction.update({ content: "❌ Channel not found.", components: [] });
       }
 
       await channel.delete().catch(console.error);
       tempChannels.delete(channelId);
 
-      return interaction.update({
-        content: `✅ Channel **${channel.name}** deleted.`,
-        components: []
-      });
+      return interaction.update({ content: `✅ Channel **${channel.name}** deleted.`, components: [] });
     }
   }
 
@@ -96,13 +144,8 @@ client.on('interactionCreate', async (interaction) => {
     const topic = interaction.options.getString('topic');
     const semData = studyMaterial[sem];
 
-    if (topic === 'main') {
-      return interaction.reply(`📁 **Semester ${sem} Main Notes Folder:**\n${semData.main}`);
-    }
-
-    if (topic === 'pyq') {
-      return interaction.reply(`📄 **Semester ${sem} Previous Year Papers (PYQs):**\n${semData.pyq}`);
-    }
+    if (topic === 'main') return interaction.reply(`📁 **Semester ${sem} Main Notes Folder:**\n${semData.main}`);
+    if (topic === 'pyq') return interaction.reply(`📄 **Semester ${sem} Previous Year Papers (PYQs):**\n${semData.pyq}`);
 
     const subjectLink = semData.subjects[topic];
     return interaction.reply(`📘 **${topicNames[topic]} Notes (Semester ${sem}):**\n${subjectLink}`);
@@ -129,9 +172,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const channel = await interaction.guild.channels.create({
         name: name,
-        type: type === 'voice'
-          ? ChannelType.GuildVoice
-          : ChannelType.GuildText,
+        type: type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText,
         parent: category.id
       });
 
@@ -151,7 +192,6 @@ client.on('interactionCreate', async (interaction) => {
       if (type === 'text') {
         await interaction.reply(`💬 Channel created in TEMP CHANNELS category: ${channel}`);
       }
-
     } catch (err) {
       interaction.reply("❌ Failed to create channel");
     }
@@ -159,40 +199,35 @@ client.on('interactionCreate', async (interaction) => {
 
   // ================= DELETE =================
   if (interaction.commandName === 'delete-temp-channel') {
-
-  if (tempChannels.size === 0) {
-    return interaction.reply("❌ No temp channels available.");
-  }
-
-  const options = [];
-
-  tempChannels.forEach((data, channelId) => {
-    const channel = interaction.guild.channels.cache.get(channelId);
-    if (channel) {
-      options.push({
-        label: channel.name,
-        value: channel.id
-      });
+    if (tempChannels.size === 0) {
+      return interaction.reply("❌ No temp channels available.");
     }
-  });
 
-  if (options.length === 0) {
-    return interaction.reply("❌ No valid temp channels found.");
+    const options = [];
+    tempChannels.forEach((data, channelId) => {
+      const channel = interaction.guild.channels.cache.get(channelId);
+      if (channel) {
+        options.push({ label: channel.name, value: channel.id });
+      }
+    });
+
+    if (options.length === 0) {
+      return interaction.reply("❌ No valid temp channels found.");
+    }
+
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('delete_channel_select')
+      .setPlaceholder('Select a channel to delete')
+      .addOptions(options.slice(0, 25)); // Discord limit = 25
+
+    const row = new ActionRowBuilder().addComponents(selectMenu);
+
+    await interaction.reply({
+      content: "🗑️ Select a temp channel to delete:",
+      components: [row],
+      ephemeral: true
+    });
   }
-
-  const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId('delete_channel_select')
-    .setPlaceholder('Select a channel to delete')
-    .addOptions(options.slice(0, 25)); // Discord limit = 25
-
-  const row = new ActionRowBuilder().addComponents(selectMenu);
-
-  await interaction.reply({
-    content: "🗑️ Select a temp channel to delete:",
-    components: [row],
-    ephemeral: true
-  });
-}
 
   // ================= WHOIS =================
   if (interaction.commandName === 'whois') {
@@ -234,7 +269,6 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-
   // ================= TEMPROLE =================
   if (interaction.commandName === 'temprole') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -245,12 +279,8 @@ client.on('interactionCreate', async (interaction) => {
     const targetUser = interaction.options.getMember('user');
     const role = interaction.options.getRole('role');
 
-    if (!targetUser) {
-      return interaction.reply({ content: "❌ User not found!", ephemeral: true });
-    }
-    if (!role) {
-      return interaction.reply({ content: "❌ Role not found!", ephemeral: true });
-    }
+    if (!targetUser) return interaction.reply({ content: "❌ User not found!", ephemeral: true });
+    if (!role) return interaction.reply({ content: "❌ Role not found!", ephemeral: true });
 
     try {
       if (subcommand === 'add') {
@@ -272,7 +302,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // ================= DEL (CLEAR MESSAGES) =================
+  // ================= CLEAR MESSAGES =================
   if (interaction.commandName === 'clear-chat') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: "❌ You don't have permission!", ephemeral: true });
@@ -286,9 +316,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     try {
-      await interaction.deferReply({ ephemeral: true }); // Acknowledge the interaction while messages are being fetched/deleted
+      await interaction.deferReply({ ephemeral: true }); 
       const fetchedMessages = await channel.messages.fetch({ limit: amount });
-      await channel.bulkDelete(fetchedMessages, true); // true to filter out messages older than 14 days
+      await channel.bulkDelete(fetchedMessages, true);
       await interaction.editReply(`✅ Cleared **${fetchedMessages.size}** messages in this channel.`);
     } catch (error) {
       console.error("Error clearing messages:", error);
@@ -304,19 +334,10 @@ client.on('interactionCreate', async (interaction) => {
 
     const target = interaction.options.getMember('user');
 
-    if (!target) {
-      return interaction.reply({ content: "❌ User not found!", ephemeral: true });
-    }
-    if (!target.kickable) {
-      return interaction.reply({ content: "❌ I cannot kick this user. They might have a higher role or I lack permissions.", ephemeral: true });
-    }
-    if (target.id === interaction.user.id) {
-        return interaction.reply({ content: "❌ You cannot kick yourself!", ephemeral: true });
-    }
-    if (target.id === client.user.id) {
-        return interaction.reply({ content: "❌ I cannot kick myself!", ephemeral: true });
-    }
-
+    if (!target) return interaction.reply({ content: "❌ User not found!", ephemeral: true });
+    if (!target.kickable) return interaction.reply({ content: "❌ I cannot kick this user. They might have a higher role or I lack permissions.", ephemeral: true });
+    if (target.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot kick yourself!", ephemeral: true });
+    if (target.id === client.user.id) return interaction.reply({ content: "❌ I cannot kick myself!", ephemeral: true });
 
     try {
       await target.kick();
@@ -341,7 +362,6 @@ client.on('interactionCreate', async (interaction) => {
       await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
       await interaction.reply(`🔒 Channel Locked.`);
 
-      // If a timer like "1h" or "30m" was provided
       if (timer) {
         let ms = 0;
         if (timer.endsWith('h')) ms = parseInt(timer) * 3600000;
@@ -361,121 +381,192 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-
   // ================= RUN CODE =================
   if (interaction.commandName === 'run') {
-    await interaction.deferReply(); // Acknowledge the command immediately
+    // 1. Reply ephemerally so ONLY the user running it can see the code terminal
+    await interaction.deferReply({ ephemeral: true });
+
+    if (activeSessions.has(interaction.user.id)) {
+      return interaction.editReply("❌ You already have a code running! Please wait for it to finish.");
+    }
 
     let language = interaction.options.getString('language');
     let code = interaction.options.getString('code');
-const file = interaction.options.getAttachment('file');
+    const file = interaction.options.getAttachment('file');
 
-// 📂 If file uploaded → get code from file
-if (file) {
-  const res = await axios.get(file.url);
-  code = res.data;
-}
-
-// fallback for manual input
-if (code) {
-  code = code.replace(/\\n/g, '\n');
-}
-
-// ❌ if nothing provided
-if (!code) {
-  return interaction.editReply("❌ Provide code or upload a file.");
-}
-    
-    code = code.replace(/\\n/g, '\n');
-
-    // Mapping Discord language options to Piston API runtime identifiers
-    const runtimeMap = {
-  python: { lang: 'python', version: '3.10.0' },
-  javascript: { lang: 'nodejs', version: '18.15.0' },
-  c: { lang: 'c', version: '10.2.0' },
-  cpp: { lang: 'cpp', version: '10.2.0' },
-  java: { lang: 'java', version: '15.0.2' },
-  rust: { lang: 'rust', version: '1.68.2' },
-  go: { lang: 'go', version: '1.16.2' },
-  csharp: { lang: 'csharp', version: '6.12.0' }
-  };
-
-    const selected = runtimeMap[language];
-
-    if (!selected) {
-      return interaction.editReply({ content: "❌ Unsupported language selected.", ephemeral: true });
+    if (file) {
+      const res = await axios.get(file.url);
+      code = res.data;
     }
+
+    if (code) code = code.replace(/\\n/g, '\n');
+    if (!code) return interaction.editReply("❌ Provide code or upload a file.");
+
+    const id = Date.now();
+    let filePath = "";
+    let compileCmd = null;
+    let runCmd = "";
+    let runArgs = [];
 
     try {
-      const response = await axios.post("https://jene-shadeful-lala.ngrok-free.dev/run", {
-  language: language,
-  code: code
-});
+      // Setup file paths & execution commands based on language
+      if (language === "python") {
+        filePath = path.join(tempDir, `code_${id}.py`);
+        fs.writeFileSync(filePath, code);
+        runCmd = "python3";
+        runArgs = [filePath];
+      } else if (language === "javascript") {
+        filePath = path.join(tempDir, `code_${id}.js`);
+        fs.writeFileSync(filePath, code);
+        runCmd = "node";
+        runArgs = [filePath];
+      } else if (language === "c") {
+        filePath = path.join(tempDir, `code_${id}.c`);
+        const exePath = path.join(tempDir, `code_${id}.out`);
+        fs.writeFileSync(filePath, code);
+        compileCmd = `gcc "${filePath}" -o "${exePath}"`;
+        runCmd = exePath;
+      } else if (language === "cpp") {
+        filePath = path.join(tempDir, `code_${id}.cpp`);
+        const exePath = path.join(tempDir, `code_${id}.out`);
+        fs.writeFileSync(filePath, code);
+        compileCmd = `g++ "${filePath}" -o "${exePath}"`;
+        runCmd = exePath;
+      } else if (language === "java") {
+        const className = `Main_${id}`;
+        filePath = path.join(tempDir, `${className}.java`);
+        // Force the public class name to match the file name so Java compiler doesn't throw a fit
+        code = code.replace(/public\s+class\s+[A-Za-z0-9_]+/g, `public class ${className}`);
+        fs.writeFileSync(filePath, code);
+        compileCmd = `javac "${filePath}"`;
+        runCmd = "java";
+        runArgs = ["-cp", tempDir, className];
+      }
 
-const output = response.data.output;
-const time = response.data.time;
+      // Compile if needed (C/C++/Java)
+      if (compileCmd) {
+        await interaction.editReply(`⚙️ Compiling ${language}...`);
+        try {
+          execSync(compileCmd, { stdio: 'pipe' });
+        } catch (err) {
+          return interaction.editReply(`❌ **Compilation Error:**\n\`\`\`\n${err.stderr.toString()}\n\`\`\``);
+        }
+      }
 
-// handle long output
-let finalOutput = output;
-if (finalOutput.length > 1900) {
-  finalOutput = finalOutput.substring(0, 1800) + "\n...truncated";
-}
+      // Spawn the live background process
+      const child = spawn(runCmd, runArgs);
 
-await interaction.editReply(
-  `⚙️ **Code Execution (${language})**\n\n**Output:**\n\`\`\`\n${finalOutput}\n\`\`\`\n**Time taken to execute on main machine:** ${time} ms`
-);
+      // Create interactive input button
+      const inputButton = new ButtonBuilder()
+        .setCustomId('send_code_input')
+        .setLabel('⌨️ Send Input')
+        .setStyle(ButtonStyle.Primary);
+      const actionRow = new ActionRowBuilder().addComponents(inputButton);
 
-    } catch (error) {
-      console.error("FULL ERROR:", error.response?.data || error.message);
-      await interaction.editReply("❌ An error occurred while running the code. The code execution service might be temporarily unavailable. Request @<Code/Drunkard> to start the service.");
+      // Save user's active session
+      activeSessions.set(interaction.user.id, {
+        process: child,
+        output: ""
+      });
+
+      // Function to update the discord message safely without rate limits
+      let lastUpdate = Date.now();
+      const updateMessage = async (isFinal = false) => {
+        const session = activeSessions.get(interaction.user.id);
+        if (!session) return;
+        
+        let displayOutput = session.output || "Waiting for output/input...";
+        if (displayOutput.length > 1900) displayOutput = displayOutput.substring(displayOutput.length - 1900); // keep last 1900 chars
+
+        const messageContent = `🖥️ **Live Terminal (${language})**\n\`\`\`\n${displayOutput}\n\`\`\``;
+        
+        try {
+          if (isFinal) {
+            await interaction.editReply({ content: messageContent + "\n✅ *Process finished.*", components: [] });
+          } else if (Date.now() - lastUpdate > 1500) { // Update every 1.5s max to avoid API rate limits
+            lastUpdate = Date.now();
+            await interaction.editReply({ content: messageContent, components: [actionRow] });
+          }
+        } catch (e) {}
+      };
+
+      await updateMessage();
+
+      // Listen to console output from the code
+      child.stdout.on('data', (data) => {
+        const session = activeSessions.get(interaction.user.id);
+        if(session) { session.output += data.toString(); updateMessage(); }
+      });
+
+      child.stderr.on('data', (data) => {
+        const session = activeSessions.get(interaction.user.id);
+        if(session) { session.output += `[ERROR] ${data.toString()}`; updateMessage(); }
+      });
+
+      // When process finishes running
+      child.on('close', (code) => {
+        activeSessions.delete(interaction.user.id);
+        updateMessage(true);
+      });
+
+      // Auto-kill process after 2 minutes so users don't freeze the Railway container with infinite while() loops
+      setTimeout(() => {
+        if (activeSessions.has(interaction.user.id)) {
+          child.kill();
+          const session = activeSessions.get(interaction.user.id);
+          session.output += "\n⏳ [PROCESS KILLED: Time limit reached (2 minutes)]";
+          updateMessage(true);
+          activeSessions.delete(interaction.user.id);
+        }
+      }, 120000);
+
+    } catch (err) {
+      console.log(err);
+      interaction.editReply("❌ Something went wrong starting the code.");
+      activeSessions.delete(interaction.user.id);
     }
   }
 
+  // ================= BADGE =================
+  if (interaction.commandName === 'badge') {
+    const language = interaction.options.getString('language');
 
-// ================= BADGE =================
-if (interaction.commandName === 'badge') {
-  const language = interaction.options.getString('language');
+    const roleMap = {
+      python: "🐍 Python",
+      javascript: "🟨 JavaScript",
+      c: "⚙️ C",
+      cpp: "⚙️⚙️ C++",
+      java: "☕ Java"
+    };
 
-  const roleMap = {
-    python: "🐍 Python",
-    javascript: "🟨 JavaScript",
-    c: "⚙️ C",
-    cpp: "⚙️⚙️ C++",
-    java: "☕ Java"
-  };
+    const roleName = roleMap[language];
+    const member = interaction.member;
 
-  const roleName = roleMap[language];
-  const member = interaction.member;
-
-  // remove old badges
-  for (let key in roleMap) {
-    const r = interaction.guild.roles.cache.find(x => x.name === roleMap[key]);
-    if (r && member.roles.cache.has(r.id)) {
-      await member.roles.remove(r);
+    // remove old badges
+    for (let key in roleMap) {
+      const r = interaction.guild.roles.cache.find(x => x.name === roleMap[key]);
+      if (r && member.roles.cache.has(r.id)) {
+        await member.roles.remove(r);
+      }
     }
+
+    // add new badge
+    const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+
+    if (!role) {
+      return interaction.reply("❌ Role not found. Create roles first.");
+    }
+
+    await member.roles.add(role);
+    await interaction.reply({ content: `🏷️ Badge updated → **${roleName}**`, ephemeral: true });
   }
-
-  // add new badge
-  const role = interaction.guild.roles.cache.find(r => r.name === roleName);
-
-  if (!role) {
-    return interaction.reply("❌ Role not found. Create roles first.");
-  }
-
-  await member.roles.add(role);
-
-  await interaction.reply({ content: `🏷️ Badge updated → **${roleName}**`, ephemeral: true });
-}
 
 });
-
 
 // ================= AUTO DELETE VOICE =================
 client.on('voiceStateUpdate', (oldState) => {
   const channel = oldState.channel;
-
   if (!channel) return;
-
   if (tempChannels.has(channel.id)) {
     if (channel.members.size === 0) {
       channel.delete().catch(console.error);
@@ -488,32 +579,30 @@ client.on('voiceStateUpdate', (oldState) => {
 setInterval(() => {
   tempChannels.forEach((data, channelId) => {
     if (data.type !== 'text') return;
-
     const channel = client.channels.cache.get(channelId);
     if (!channel) return;
-
     const lastMessage = channel.lastMessage;
     if (!lastMessage) return;
-
     const diff = Date.now() - lastMessage.createdTimestamp;
-
-    if (diff > 60000) { // Keep text channels for 1 minute of inactivity before deleting
+    
+    if (diff > 60000) { // Delete after 1 minute of inactivity
       channel.delete().catch(console.error);
       tempChannels.delete(channelId);
     }
   });
 }, 30000);
 
-// ================= LOGIN =================
-client.login(process.env.TOKEN);
-
+// ================= EXPRESS SERVER (FOR RAILWAY HEALTH CHECK) =================
 const express = require("express");
 const app = express();
 
 app.get("/", (req, res) => {
-  res.send("Bot is running!");
+  res.send("Bot is running securely on Railway!");
 });
 
-app.listen(3000, () => {
+app.listen(process.env.PORT || 3000, () => {
   console.log("Server running on port 3000");
 });
+
+// ================= LOGIN =================
+client.login(process.env.TOKEN);
