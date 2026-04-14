@@ -418,11 +418,6 @@ client.on('interactionCreate', async (interaction) => {
       code = res.data;
     }
 
-    // fallback for manual input
-    if (code) {
-      code = code.replace(/\\n/g, '\n');
-    }
-
     // ❌ if nothing provided
     if (!code) {
       return interaction.editReply("❌ Provide code or upload a file.");
