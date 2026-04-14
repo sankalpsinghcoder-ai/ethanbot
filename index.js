@@ -73,11 +73,11 @@ client.on('interactionCreate', async (interaction) => {
         userId: interaction.user.id,
         input: userInput
       });
-      await interaction.reply({ content: `✅ Input sent: \`${userInput}\``, ephemeral: true });
+      await interaction.reply({ content: `✅ Input sent: \`${userInput}\``, ephemeral: false });
       // Delete the "Input sent" message after 2 seconds to keep chat clean
       setTimeout(() => interaction.deleteReply().catch(()=>{}), 2000);
     } catch (e) {
-      await interaction.reply({ content: "❌ Failed to send input. The program may have already finished.", ephemeral: true });
+      await interaction.reply({ content: "❌ Failed to send input. The program may have already finished.", ephemeral: false });
     }
     return;
   }
@@ -416,6 +416,11 @@ client.on('interactionCreate', async (interaction) => {
     if (file) {
       const res = await axios.get(file.url);
       code = res.data;
+    }
+
+    // fallback for manual input
+    if (code) {
+      code = code.replace(/\\n/g, '\n');
     }
 
     // ❌ if nothing provided
