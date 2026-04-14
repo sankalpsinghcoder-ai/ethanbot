@@ -6,7 +6,7 @@ const {
 const axios = require('axios');
 
 // ⚠️ YOUR NGROK URL (Keep this updated if your free Ngrok URL changes)
-const NGROK_URL = "https://jene-shadeful-lala.ngrok-free.dev";
+const NGROK_URL = "https://jene-shadeful-lala.ngrok-free.dev/";
 
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
