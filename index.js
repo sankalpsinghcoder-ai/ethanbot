@@ -4,15 +4,9 @@ const {
   ModalBuilder, TextInputBuilder, TextInputStyle 
 } = require('discord.js');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-const { spawn, execSync } = require('child_process');
 
-// ================= SETUP TEMP DIR =================
-const tempDir = path.join(__dirname, "temp");
-if (!fs.existsSync(tempDir)) {
-  fs.mkdirSync(tempDir);
-}
+// ⚠️ YOUR NGROK URL (Keep this updated if your free Ngrok URL changes)
+const NGROK_URL = "https://jene-shadeful-lala.ngrok-free.dev";
 
 // ================= STUDY MATERIALS DATABASE =================
 const studyMaterial = {
@@ -29,7 +23,7 @@ const studyMaterial = {
     main: "https://drive.google.com/drive/folders/157XQ0sNZE368MLCK2B5awQfJn-cXeMr8?usp=sharing",
     pyq: "❌ PYQs for Semester 2 are not currently available.",
     subjects: {
-      sad: "https://drive.google.com/drive/folders/1NcohhRxvUkVwNoihR8SzLyI5NzRkGiMD?usp=drive_link || OR || Mamta Mam Notes: https://drive.google.com/drive/folders/1kaA6f_4Bw55R67LOmny6PUzs6FjT9vP3?usp=drive_link",
+      sad: "https://drive.google.com/drive/folders/1NcohhRxvUkVwNoihR8SzLyI5NzRkGiMD?usp=drive_link",
       mmt: "https://drive.google.com/drive/folders/1gXToALWgR3-Lmy0nHkjVb4SOE8V9xydx?usp=drive_link",
       dsa: "https://drive.google.com/drive/folders/1_z8AdMsz2UOU1a4PoAuI4FzHeKNt27Ht?usp=drive_link",
       cpp: "https://drive.google.com/drive/folders/1dA9aKILjWCcn_7hXSuNjnQm1yX9Xy462?usp=drive_link"
@@ -47,10 +41,10 @@ const topicNames = {
   cpp: "C++"
 };
 
-// ================= STORAGE MAPS =================
+// ================= STORAGE =================
 const tempChannels = new Map();
 const warnings = new Map();
-const activeSessions = new Map(); // KEEPS TRACK OF USER'S RUNNING CODE
+const userPollers = new Map(); // Keeps track of users running live code
 
 const client = new Client({
   intents: [
@@ -70,35 +64,26 @@ client.on('ready', () => {
 // ================= INTERACTIONS =================
 client.on('interactionCreate', async (interaction) => {
 
-  // ================= MODAL SUBMIT (RECEIVING CODE INPUT) =================
+  // ================= 1. RECEIVING INPUT FROM MODAL =================
   if (interaction.isModalSubmit() && interaction.customId === 'code_input_modal') {
     const userInput = interaction.fields.getTextInputValue('code_input_field');
-    const session = activeSessions.get(interaction.user.id);
-
-    if (!session) {
-      return interaction.reply({ content: "❌ Your code execution session has ended or expired.", ephemeral: true });
+    
+    try {
+      await axios.post(`${NGROK_URL}/input`, {
+        userId: interaction.user.id,
+        input: userInput
+      });
+      await interaction.reply({ content: `✅ Input sent: \`${userInput}\``, ephemeral: true });
+      // Delete the "Input sent" message after 2 seconds to keep chat clean
+      setTimeout(() => interaction.deleteReply().catch(()=>{}), 2000);
+    } catch (e) {
+      await interaction.reply({ content: "❌ Failed to send input. The program may have already finished.", ephemeral: true });
     }
-
-    // Send the input directly to the running program
-    session.process.stdin.write(userInput + "\n");
-    
-    // Add what the user typed to the visual output so they can see it
-    session.output += `> ${userInput}\n`;
-    
-    await interaction.reply({ content: `✅ Input sent: \`${userInput}\``, ephemeral: true });
-    
-    // delete the "input sent" message after 2 seconds to keep it clean
-    setTimeout(() => interaction.deleteReply().catch(()=>{}), 2000); 
     return;
   }
 
-  // ================= BUTTON CLICK (OPENING INPUT BOX) =================
+  // ================= 2. OPENING INPUT BOX (BUTTON CLICK) =================
   if (interaction.isButton() && interaction.customId === 'send_code_input') {
-    const session = activeSessions.get(interaction.user.id);
-    if (!session) {
-      return interaction.reply({ content: "❌ No active code session found.", ephemeral: true });
-    }
-
     const modal = new ModalBuilder()
       .setCustomId('code_input_modal')
       .setTitle('Provide Input to your Code');
@@ -116,20 +101,26 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  // ================= DROPDOWN HANDLER (DELETE CHANNELS) =================
+  // ================= DROPDOWN HANDLER =================
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === 'delete_channel_select') {
       const channelId = interaction.values[0];
       const channel = interaction.guild.channels.cache.get(channelId);
 
       if (!channel) {
-        return interaction.update({ content: "❌ Channel not found.", components: [] });
+        return interaction.update({
+          content: "❌ Channel not found.",
+          components: []
+        });
       }
 
       await channel.delete().catch(console.error);
       tempChannels.delete(channelId);
 
-      return interaction.update({ content: `✅ Channel **${channel.name}** deleted.`, components: [] });
+      return interaction.update({
+        content: `✅ Channel **${channel.name}** deleted.`,
+        components: []
+      });
     }
   }
 
@@ -144,8 +135,13 @@ client.on('interactionCreate', async (interaction) => {
     const topic = interaction.options.getString('topic');
     const semData = studyMaterial[sem];
 
-    if (topic === 'main') return interaction.reply(`📁 **Semester ${sem} Main Notes Folder:**\n${semData.main}`);
-    if (topic === 'pyq') return interaction.reply(`📄 **Semester ${sem} Previous Year Papers (PYQs):**\n${semData.pyq}`);
+    if (topic === 'main') {
+      return interaction.reply(`📁 **Semester ${sem} Main Notes Folder:**\n${semData.main}`);
+    }
+
+    if (topic === 'pyq') {
+      return interaction.reply(`📄 **Semester ${sem} Previous Year Papers (PYQs):**\n${semData.pyq}`);
+    }
 
     const subjectLink = semData.subjects[topic];
     return interaction.reply(`📘 **${topicNames[topic]} Notes (Semester ${sem}):**\n${subjectLink}`);
@@ -172,7 +168,9 @@ client.on('interactionCreate', async (interaction) => {
 
       const channel = await interaction.guild.channels.create({
         name: name,
-        type: type === 'voice' ? ChannelType.GuildVoice : ChannelType.GuildText,
+        type: type === 'voice'
+          ? ChannelType.GuildVoice
+          : ChannelType.GuildText,
         parent: category.id
       });
 
@@ -192,6 +190,7 @@ client.on('interactionCreate', async (interaction) => {
       if (type === 'text') {
         await interaction.reply(`💬 Channel created in TEMP CHANNELS category: ${channel}`);
       }
+
     } catch (err) {
       interaction.reply("❌ Failed to create channel");
     }
@@ -204,10 +203,14 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const options = [];
+
     tempChannels.forEach((data, channelId) => {
       const channel = interaction.guild.channels.cache.get(channelId);
       if (channel) {
-        options.push({ label: channel.name, value: channel.id });
+        options.push({
+          label: channel.name,
+          value: channel.id
+        });
       }
     });
 
@@ -269,6 +272,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
+
   // ================= TEMPROLE =================
   if (interaction.commandName === 'temprole') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -279,8 +283,12 @@ client.on('interactionCreate', async (interaction) => {
     const targetUser = interaction.options.getMember('user');
     const role = interaction.options.getRole('role');
 
-    if (!targetUser) return interaction.reply({ content: "❌ User not found!", ephemeral: true });
-    if (!role) return interaction.reply({ content: "❌ Role not found!", ephemeral: true });
+    if (!targetUser) {
+      return interaction.reply({ content: "❌ User not found!", ephemeral: true });
+    }
+    if (!role) {
+      return interaction.reply({ content: "❌ Role not found!", ephemeral: true });
+    }
 
     try {
       if (subcommand === 'add') {
@@ -302,7 +310,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // ================= CLEAR MESSAGES =================
+  // ================= DEL (CLEAR MESSAGES) =================
   if (interaction.commandName === 'clear-chat') {
     if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
       return interaction.reply({ content: "❌ You don't have permission!", ephemeral: true });
@@ -316,9 +324,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     try {
-      await interaction.deferReply({ ephemeral: true }); 
+      await interaction.deferReply({ ephemeral: true }); // Acknowledge the interaction while messages are being fetched/deleted
       const fetchedMessages = await channel.messages.fetch({ limit: amount });
-      await channel.bulkDelete(fetchedMessages, true);
+      await channel.bulkDelete(fetchedMessages, true); // true to filter out messages older than 14 days
       await interaction.editReply(`✅ Cleared **${fetchedMessages.size}** messages in this channel.`);
     } catch (error) {
       console.error("Error clearing messages:", error);
@@ -334,10 +342,18 @@ client.on('interactionCreate', async (interaction) => {
 
     const target = interaction.options.getMember('user');
 
-    if (!target) return interaction.reply({ content: "❌ User not found!", ephemeral: true });
-    if (!target.kickable) return interaction.reply({ content: "❌ I cannot kick this user. They might have a higher role or I lack permissions.", ephemeral: true });
-    if (target.id === interaction.user.id) return interaction.reply({ content: "❌ You cannot kick yourself!", ephemeral: true });
-    if (target.id === client.user.id) return interaction.reply({ content: "❌ I cannot kick myself!", ephemeral: true });
+    if (!target) {
+      return interaction.reply({ content: "❌ User not found!", ephemeral: true });
+    }
+    if (!target.kickable) {
+      return interaction.reply({ content: "❌ I cannot kick this user. They might have a higher role or I lack permissions.", ephemeral: true });
+    }
+    if (target.id === interaction.user.id) {
+        return interaction.reply({ content: "❌ You cannot kick yourself!", ephemeral: true });
+    }
+    if (target.id === client.user.id) {
+        return interaction.reply({ content: "❌ I cannot kick myself!", ephemeral: true });
+    }
 
     try {
       await target.kick();
@@ -362,6 +378,7 @@ client.on('interactionCreate', async (interaction) => {
       await channel.permissionOverwrites.edit(interaction.guild.roles.everyone, { SendMessages: false });
       await interaction.reply(`🔒 Channel Locked.`);
 
+      // If a timer like "1h" or "30m" was provided
       if (timer) {
         let ms = 0;
         if (timer.endsWith('h')) ms = parseInt(timer) * 3600000;
@@ -381,151 +398,102 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // ================= RUN CODE =================
-  if (interaction.commandName === 'run') {
-    // 1. Reply ephemerally so ONLY the user running it can see the code terminal
-    await interaction.deferReply({ ephemeral: true });
 
-    if (activeSessions.has(interaction.user.id)) {
-      return interaction.editReply("❌ You already have a code running! Please wait for it to finish.");
+  // ================= RUN CODE (NEW LIVE INTERACTIVE VERSION) =================
+  if (interaction.commandName === 'run') {
+    // 🔥 Ephemeral means ONLY the user who ran it can see it on the server
+    await interaction.deferReply({ ephemeral: true }); 
+
+    if (userPollers.has(interaction.user.id)) {
+      return interaction.editReply("❌ You already have code running! Please wait for it to finish.");
     }
 
     let language = interaction.options.getString('language');
     let code = interaction.options.getString('code');
     const file = interaction.options.getAttachment('file');
 
+    // 📂 If file uploaded → get code from file
     if (file) {
       const res = await axios.get(file.url);
       code = res.data;
     }
 
-    if (code) code = code.replace(/\\n/g, '\n');
-    if (!code) return interaction.editReply("❌ Provide code or upload a file.");
+    // fallback for manual input
+    if (code) {
+      code = code.replace(/\\n/g, '\n');
+    }
 
-    const id = Date.now();
-    let filePath = "";
-    let compileCmd = null;
-    let runCmd = "";
-    let runArgs = [];
+    // ❌ if nothing provided
+    if (!code) {
+      return interaction.editReply("❌ Provide code or upload a file.");
+    }
 
     try {
-      // Setup file paths & execution commands based on language
-      if (language === "python") {
-        filePath = path.join(tempDir, `code_${id}.py`);
-        fs.writeFileSync(filePath, code);
-        runCmd = "python3";
-        runArgs = [filePath];
-      } else if (language === "javascript") {
-        filePath = path.join(tempDir, `code_${id}.js`);
-        fs.writeFileSync(filePath, code);
-        runCmd = "node";
-        runArgs = [filePath];
-      } else if (language === "c") {
-        filePath = path.join(tempDir, `code_${id}.c`);
-        const exePath = path.join(tempDir, `code_${id}.out`);
-        fs.writeFileSync(filePath, code);
-        compileCmd = `gcc "${filePath}" -o "${exePath}"`;
-        runCmd = exePath;
-      } else if (language === "cpp") {
-        filePath = path.join(tempDir, `code_${id}.cpp`);
-        const exePath = path.join(tempDir, `code_${id}.out`);
-        fs.writeFileSync(filePath, code);
-        compileCmd = `g++ "${filePath}" -o "${exePath}"`;
-        runCmd = exePath;
-      } else if (language === "java") {
-        const className = `Main_${id}`;
-        filePath = path.join(tempDir, `${className}.java`);
-        // Force the public class name to match the file name so Java compiler doesn't throw a fit
-        code = code.replace(/public\s+class\s+[A-Za-z0-9_]+/g, `public class ${className}`);
-        fs.writeFileSync(filePath, code);
-        compileCmd = `javac "${filePath}"`;
-        runCmd = "java";
-        runArgs = ["-cp", tempDir, className];
+      // 1. Tell local PC to start the code
+      const startRes = await axios.post(`${NGROK_URL}/start`, {
+        userId: interaction.user.id,
+        language: language,
+        code: code
+      });
+
+      if (startRes.data.error) {
+        return interaction.editReply(startRes.data.error);
       }
 
-      // Compile if needed (C/C++/Java)
-      if (compileCmd) {
-        await interaction.editReply(`⚙️ Compiling ${language}...`);
-        try {
-          execSync(compileCmd, { stdio: 'pipe' });
-        } catch (err) {
-          return interaction.editReply(`❌ **Compilation Error:**\n\`\`\`\n${err.stderr.toString()}\n\`\`\``);
-        }
-      }
-
-      // Spawn the live background process
-      const child = spawn(runCmd, runArgs);
-
-      // Create interactive input button
+      // 2. Setup the "Send Input" Button
       const inputButton = new ButtonBuilder()
         .setCustomId('send_code_input')
         .setLabel('⌨️ Send Input')
         .setStyle(ButtonStyle.Primary);
       const actionRow = new ActionRowBuilder().addComponents(inputButton);
 
-      // Save user's active session
-      activeSessions.set(interaction.user.id, {
-        process: child,
-        output: ""
+      await interaction.editReply({ 
+        content: `⚙️ **Started ${language}...**\nWaiting for output...`, 
+        components: [actionRow] 
       });
 
-      // Function to update the discord message safely without rate limits
-      let lastUpdate = Date.now();
-      const updateMessage = async (isFinal = false) => {
-        const session = activeSessions.get(interaction.user.id);
-        if (!session) return;
-        
-        let displayOutput = session.output || "Waiting for output/input...";
-        if (displayOutput.length > 1900) displayOutput = displayOutput.substring(displayOutput.length - 1900); // keep last 1900 chars
-
-        const messageContent = `🖥️ **Live Terminal (${language})**\n\`\`\`\n${displayOutput}\n\`\`\``;
-        
+      // 3. Start Polling your PC for live output every 2 seconds
+      const pollInterval = setInterval(async () => {
         try {
-          if (isFinal) {
+          const pollRes = await axios.get(`${NGROK_URL}/poll/${interaction.user.id}`);
+          const data = pollRes.data;
+
+          if (data.status === "not_found") {
+            clearInterval(pollInterval);
+            userPollers.delete(interaction.user.id);
+            return;
+          }
+
+          let displayOutput = data.output || "Waiting for output/input...";
+          // Handle max length to not break Discord messages
+          if (displayOutput.length > 1900) {
+            displayOutput = displayOutput.substring(displayOutput.length - 1900);
+          }
+
+          const messageContent = `🖥️ **Live Terminal (${language})**\n\`\`\`\n${displayOutput}\n\`\`\``;
+
+          if (data.status === "finished") {
+            clearInterval(pollInterval);
+            userPollers.delete(interaction.user.id);
             await interaction.editReply({ content: messageContent + "\n✅ *Process finished.*", components: [] });
-          } else if (Date.now() - lastUpdate > 1500) { // Update every 1.5s max to avoid API rate limits
-            lastUpdate = Date.now();
+          } else {
             await interaction.editReply({ content: messageContent, components: [actionRow] });
           }
-        } catch (e) {}
-      };
-
-      await updateMessage();
-
-      // Listen to console output from the code
-      child.stdout.on('data', (data) => {
-        const session = activeSessions.get(interaction.user.id);
-        if(session) { session.output += data.toString(); updateMessage(); }
-      });
-
-      child.stderr.on('data', (data) => {
-        const session = activeSessions.get(interaction.user.id);
-        if(session) { session.output += `[ERROR] ${data.toString()}`; updateMessage(); }
-      });
-
-      // When process finishes running
-      child.on('close', (code) => {
-        activeSessions.delete(interaction.user.id);
-        updateMessage(true);
-      });
-
-      // Auto-kill process after 2 minutes so users don't freeze the Railway container with infinite while() loops
-      setTimeout(() => {
-        if (activeSessions.has(interaction.user.id)) {
-          child.kill();
-          const session = activeSessions.get(interaction.user.id);
-          session.output += "\n⏳ [PROCESS KILLED: Time limit reached (2 minutes)]";
-          updateMessage(true);
-          activeSessions.delete(interaction.user.id);
+        } catch (e) {
+          clearInterval(pollInterval);
+          userPollers.delete(interaction.user.id);
+          await interaction.editReply({ content: "❌ Lost connection to execution server.", components: [] });
         }
-      }, 120000);
+      }, 2000); // Polls every 2000 milliseconds
 
-    } catch (err) {
-      console.log(err);
-      interaction.editReply("❌ Something went wrong starting the code.");
-      activeSessions.delete(interaction.user.id);
+      userPollers.set(interaction.user.id, pollInterval);
+
+    } catch (error) {
+      console.error(error.message);
+      await interaction.editReply("❌ Execution server is offline. Check if `runner.js` and Ngrok are running on your PC.");
     }
   }
+
 
   // ================= BADGE =================
   if (interaction.commandName === 'badge') {
@@ -558,15 +526,19 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     await member.roles.add(role);
+
     await interaction.reply({ content: `🏷️ Badge updated → **${roleName}**`, ephemeral: true });
   }
 
 });
 
+
 // ================= AUTO DELETE VOICE =================
 client.on('voiceStateUpdate', (oldState) => {
   const channel = oldState.channel;
+
   if (!channel) return;
+
   if (tempChannels.has(channel.id)) {
     if (channel.members.size === 0) {
       channel.delete().catch(console.error);
@@ -579,30 +551,32 @@ client.on('voiceStateUpdate', (oldState) => {
 setInterval(() => {
   tempChannels.forEach((data, channelId) => {
     if (data.type !== 'text') return;
+
     const channel = client.channels.cache.get(channelId);
     if (!channel) return;
+
     const lastMessage = channel.lastMessage;
     if (!lastMessage) return;
+
     const diff = Date.now() - lastMessage.createdTimestamp;
-    
-    if (diff > 60000) { // Delete after 1 minute of inactivity
+
+    if (diff > 60000) { // Keep text channels for 1 minute of inactivity before deleting
       channel.delete().catch(console.error);
       tempChannels.delete(channelId);
     }
   });
 }, 30000);
 
-// ================= EXPRESS SERVER (FOR RAILWAY HEALTH CHECK) =================
+// ================= LOGIN =================
+client.login(process.env.TOKEN);
+
 const express = require("express");
 const app = express();
 
 app.get("/", (req, res) => {
-  res.send("Bot is running securely on Railway!");
+  res.send("Bot is running!");
 });
 
-app.listen(process.env.PORT || 3000, () => {
+app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
-
-// ================= LOGIN =================
-client.login(process.env.TOKEN);
