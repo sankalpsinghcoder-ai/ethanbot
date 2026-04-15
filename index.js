@@ -21,7 +21,7 @@ const studyMaterial = {
   },
   2: {
     main: "https://drive.google.com/drive/folders/157XQ0sNZE368MLCK2B5awQfJn-cXeMr8?usp=sharing",
-    pyq: "❌ PYQs for Semester 2 are not currently available.",
+    pyq: "https://drive.google.com/drive/folders/1RC9nDXTqYjlFtouk3vLNAmIR9bYCg78x?usp=drive_link",
     subjects: {
       sad: "https://drive.google.com/drive/folders/1NcohhRxvUkVwNoihR8SzLyI5NzRkGiMD?usp=drive_link",
       mmt: "https://drive.google.com/drive/folders/1gXToALWgR3-Lmy0nHkjVb4SOE8V9xydx?usp=drive_link",
